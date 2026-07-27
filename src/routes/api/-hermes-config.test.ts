@@ -3,12 +3,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const mockIsAuthenticated = vi.hoisted(() => vi.fn(() => true))
+
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: (_path: string) => (opts: any) => opts,
 }))
 
 vi.mock('../../server/auth-middleware', () => ({
-  isAuthenticated: () => true,
+  isAuthenticated: mockIsAuthenticated,
 }))
 
 vi.mock('../../server/gateway-capabilities', () => ({
@@ -35,6 +37,8 @@ beforeEach(() => {
   tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-config-route-'))
   setEnv('HERMES_HOME', tmpHome)
   setEnv('CLAUDE_HOME', undefined)
+  mockIsAuthenticated.mockReset()
+  mockIsAuthenticated.mockReturnValue(true)
   vi.resetModules()
 })
 
@@ -53,6 +57,19 @@ async function loadHandlers(modulePath: string) {
 }
 
 describe('canonical /api/hermes-config route', () => {
+  it('GET returns a 401 response when the request is unauthenticated', async () => {
+    mockIsAuthenticated.mockReturnValue(false)
+
+    const handlers = await loadHandlers('./hermes-config')
+    const res = await handlers.GET({
+      request: new Request('http://localhost/api/hermes-config'),
+    })
+
+    expect(res).toBeInstanceOf(Response)
+    expect(res.status).toBe(401)
+    await expect(res.json()).resolves.toEqual({ error: 'Unauthorized' })
+  })
+
   it('GET returns normalized provider state with paths and active provider', async () => {
     fs.writeFileSync(
       path.join(tmpHome, 'config.yaml'),
