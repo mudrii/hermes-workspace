@@ -519,6 +519,48 @@ function isAssistantToolCallOnlyMessage(message: ChatMessage): boolean {
   return hasToolCalls && text.trim().length === 0
 }
 
+function isToolResultMessage(message: ChatMessage): boolean {
+  return message.role === 'tool' || message.role === 'toolResult'
+}
+
+export function getTrailingToolOnlyTurnSummary(
+  messages: Array<ChatMessage>,
+): {
+  count: number
+  toolNames: Array<string>
+  hasFinalAssistantText: boolean
+} | null {
+  let trailingStart = messages.length
+  while (trailingStart > 0) {
+    const message = messages[trailingStart - 1]
+    if (!isAssistantToolCallOnlyMessage(message) && !isToolResultMessage(message)) {
+      break
+    }
+    trailingStart -= 1
+  }
+
+  if (trailingStart === messages.length) return null
+
+  const toolNames = new Set<string>()
+  for (const message of messages.slice(trailingStart)) {
+    for (const toolCall of getToolCallsFromMessage(message)) {
+      if (toolCall.name) toolNames.add(toolCall.name)
+    }
+    if (message.toolName) toolNames.add(message.toolName)
+  }
+
+  return {
+    count: messages.length - trailingStart,
+    toolNames: [...toolNames],
+    hasFinalAssistantText: messages
+      .slice(0, trailingStart)
+      .some(
+        (message) =>
+          message.role === 'assistant' && textFromMessage(message).trim().length > 0,
+      ),
+  }
+}
+
 export function buildDisplayEntries(
   displayMessages: Array<ChatMessage>,
 ): Array<DisplayEntry> {
@@ -531,7 +573,7 @@ export function buildDisplayEntries(
       return
     }
 
-    if (message.role === 'tool' || message.role === 'toolResult') {
+    if (isToolResultMessage(message)) {
       const previousEntry = entries[entries.length - 1]
       if (previousEntry?.message.role === 'assistant') {
         previousEntry.attachedToolMessages.push(message)
@@ -554,13 +596,6 @@ export function buildDisplayEntries(
 
     entries.push(entry)
   })
-
-  if (pendingAssistantToolMessages.length > 0) {
-    const previousEntry = entries[entries.length - 1]
-    if (previousEntry?.message.role === 'assistant') {
-      previousEntry.attachedToolMessages.push(...pendingAssistantToolMessages)
-    }
-  }
 
   return entries
 }

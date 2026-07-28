@@ -45,6 +45,7 @@ const VALID_SEED = {
 let homeDir: string
 let seedFile: string
 let originalHermesHome: string | undefined
+let originalWorkspaceStateDir: string | undefined
 let originalSeedPath: string | undefined
 
 function writeSeed(payload: unknown): void {
@@ -62,8 +63,10 @@ beforeEach(() => {
   seedFile = join(assetDir, 'mcp-presets.seed.json')
   writeSeed(VALID_SEED)
   originalHermesHome = process.env.HERMES_HOME
+  originalWorkspaceStateDir = process.env.HERMES_WORKSPACE_STATE_DIR
   originalSeedPath = process.env.MCP_PRESETS_SEED_PATH
   process.env.HERMES_HOME = homeDir
+  process.env.HERMES_WORKSPACE_STATE_DIR = homeDir
   process.env.MCP_PRESETS_SEED_PATH = seedFile
   __resetPresetsCacheForTests()
 })
@@ -71,6 +74,11 @@ beforeEach(() => {
 afterEach(() => {
   if (originalHermesHome === undefined) delete process.env.HERMES_HOME
   else process.env.HERMES_HOME = originalHermesHome
+  if (originalWorkspaceStateDir === undefined) {
+    delete process.env.HERMES_WORKSPACE_STATE_DIR
+  } else {
+    process.env.HERMES_WORKSPACE_STATE_DIR = originalWorkspaceStateDir
+  }
   if (originalSeedPath === undefined) delete process.env.MCP_PRESETS_SEED_PATH
   else process.env.MCP_PRESETS_SEED_PATH = originalSeedPath
   rmSync(homeDir, { recursive: true, force: true })
@@ -259,15 +267,19 @@ describe('readPresets', () => {
 
   it('honors HERMES_HOME override for the user file path', async () => {
     const altHome = mkdtempSync(join(tmpdir(), 'hermes-alt-'))
+    delete process.env.HERMES_WORKSPACE_STATE_DIR
     process.env.HERMES_HOME = altHome
     __resetPresetsCacheForTests()
     try {
       const result = await readPresets()
       expect(result.source).toBe('seed')
-      expect(existsSync(join(altHome, 'mcp-presets.json'))).toBe(true)
+      expect(
+        existsSync(join(altHome, 'workspace', 'mcp-presets.json')),
+      ).toBe(true)
     } finally {
       rmSync(altHome, { recursive: true, force: true })
       process.env.HERMES_HOME = homeDir
+      process.env.HERMES_WORKSPACE_STATE_DIR = homeDir
       __resetPresetsCacheForTests()
     }
   })

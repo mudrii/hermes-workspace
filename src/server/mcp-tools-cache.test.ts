@@ -16,15 +16,26 @@ import { join } from 'node:path'
 // but since Vitest caches modules, we use the exported reset helper instead.
 
 let tmpDir: string
+let originalHermesHome: string | undefined
+let originalWorkspaceStateDir: string | undefined
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'mcp-tools-cache-test-'))
+  originalHermesHome = process.env.HERMES_HOME
+  originalWorkspaceStateDir = process.env.HERMES_WORKSPACE_STATE_DIR
   process.env.HERMES_HOME = tmpDir
+  process.env.HERMES_WORKSPACE_STATE_DIR = tmpDir
   vi.resetModules()
 })
 
 afterEach(() => {
-  delete process.env.HERMES_HOME
+  if (originalHermesHome === undefined) delete process.env.HERMES_HOME
+  else process.env.HERMES_HOME = originalHermesHome
+  if (originalWorkspaceStateDir === undefined) {
+    delete process.env.HERMES_WORKSPACE_STATE_DIR
+  } else {
+    process.env.HERMES_WORKSPACE_STATE_DIR = originalWorkspaceStateDir
+  }
   delete process.env.MCP_TOOLS_CACHE_TTL_MS
   rmSync(tmpDir, { recursive: true, force: true })
   vi.resetModules()
@@ -160,11 +171,14 @@ describe('TTL stale flag', () => {
 describe('HERMES_HOME override for path resolution', () => {
   it('uses HERMES_HOME to resolve cache file path', async () => {
     const customHome = mkdtempSync(join(tmpdir(), 'custom-hermes-'))
+    delete process.env.HERMES_WORKSPACE_STATE_DIR
     process.env.HERMES_HOME = customHome
     vi.resetModules()
 
     const mod = await loadCache()
-    expect(mod.cacheFilePath()).toBe(join(customHome, 'cache', 'mcp-tools.json'))
+    expect(mod.cacheFilePath()).toBe(
+      join(customHome, 'workspace', 'cache', 'mcp-tools.json'),
+    )
 
     mod.setProbe('server-x', {
       status: 'failed',
