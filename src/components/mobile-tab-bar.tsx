@@ -3,6 +3,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Chat01Icon,
   CheckListIcon,
+  McpServerIcon,
   UserGroupIcon,
   UserMultipleIcon,
 } from '@hugeicons/core-free-icons'
@@ -60,11 +61,18 @@ export const MOBILE_NAV_TABS: Array<TabItem> = [
     match: (p) => p.startsWith('/tasks'),
   },
   {
-    id: 'teams',
+    id: 'swarm',
     label: 'Teams',
     icon: UserGroupIcon,
     to: '/swarm',
     match: (p) => p === '/swarm' || p.startsWith('/swarm2'),
+  },
+  {
+    id: 'mcp',
+    label: 'MCP',
+    icon: McpServerIcon,
+    to: '/mcp',
+    match: (p) => p.startsWith('/mcp'),
   },
 ]
 
