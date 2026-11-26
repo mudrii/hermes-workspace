@@ -1,5 +1,11 @@
 # Security remediation validation — 2026-11-07
 
+## Follow-up — 2026-11-26
+
+The reviewed Workspace dependency fixes were committed to the fork's `security/dependency-updates-20261107` branch in [8c1235bb](https://github.com/mudrii/hermes-workspace/commit/8c1235bb). Electron, electron-builder, esbuild, and affected transitive packages were updated. A frozen install, production build, and all 750 tests pass; the full `pnpm audit` reports zero findings. The original ESLint configuration already reported 1,668 errors, and two existing peer mismatches remain (`@tanstack/eslint-config` with ESLint 10 and `@emoji-mart/react` with React 19). These need separate compatibility and lint work.
+
+The local Hermes Agent fork now pins patched dependencies, including oauthlib 4.0.1, in [56e75f2](https://github.com/mudrii/hermes-agent/commit/56e75f2). Its runtime environment has oauthlib 4.0.1, the lockfile is current, and the source checks pass. This is a fork commit; upstream review and merge remain pending.
+
 ## Decision
 
 Proceed only with a revised plan. The TanStack packages have independent version lines: `@tanstack/react-router-devtools@^1.169.39` must not be requested. The coherent TanStack upgrade also requires Vite 8, React Query, Tailwind, and test-tool updates. Hermes needs a PM dependency sync for three already-locked fixes, not a channel switch; oauthlib still needs an upstream 4.0.1 lock change. Profiles and `advanced-delegation` are supported primitives, but they do not provision the custom Workspace swarm.
