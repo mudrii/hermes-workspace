@@ -1,5 +1,6 @@
 import { createServer } from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
+import { isIPv6 } from 'node:net'
 import { join, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import server from './dist/server/server.js'
@@ -37,6 +38,12 @@ const ALWAYS_HEADERS = {
   // makes adding/removing trivial without searching the codebase.
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
+}
+
+const API_NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+  Pragma: 'no-cache',
+  Expires: '0',
 }
 
 const port = parseInt(process.env.PORT || '3000', 10)
@@ -206,7 +213,7 @@ async function requestHandler(req, res) {
     res.writeHead(200, {
       ...ALWAYS_HEADERS,
       'Content-Type': 'application/json',
-      'Cache-Control': 'no-store',
+      ...API_NO_CACHE_HEADERS,
     })
     res.end(req.method === 'GET' ? '{"ok":true}' : undefined)
     return
@@ -268,9 +275,7 @@ async function requestHandler(req, res) {
     // because static assets short-circuit before this branch.
     const reqPathname = new URL(request.url).pathname
     if (reqPathname.startsWith('/api/')) {
-      headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
-      headers['Pragma'] = 'no-cache'
-      headers['Expires'] = '0'
+      Object.assign(headers, API_NO_CACHE_HEADERS)
     }
 
     res.writeHead(response.status, headers)
@@ -303,7 +308,8 @@ async function requestHandler(req, res) {
 function listenOn(bindHost) {
   const httpServer = createServer(requestHandler)
   httpServer.listen(port, bindHost, () => {
-    console.log(`Hermes Workspace running at http://${bindHost}:${httpServer.address().port}`)
+    const urlHost = isIPv6(bindHost) ? `[${bindHost}]` : bindHost
+    console.log(`Hermes Workspace running at http://${urlHost}:${httpServer.address().port}`)
   })
   return httpServer
 }

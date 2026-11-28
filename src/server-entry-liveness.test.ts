@@ -1,13 +1,30 @@
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { request } from 'node:http'
-import { tmpdir } from 'node:os'
+import { request, type IncomingHttpHeaders } from 'node:http'
+import { networkInterfaces, tmpdir } from 'node:os'
+import { createInterface } from 'node:readline'
 import { join } from 'node:path'
+import type { Readable } from 'node:stream'
 import { expect, it } from 'vitest'
 
+async function readStartupUrl(stdout: Readable): Promise<string> {
+  const lines = createInterface({ input: stdout })
+  const timeout = setTimeout(() => lines.close(), 4_000)
+  const prefix = 'Hermes Workspace running at '
+  try {
+    for await (const line of lines) {
+      if (line.startsWith(prefix)) return new URL(line.slice(prefix.length)).origin
+    }
+    throw new Error('Workspace did not print its startup URL')
+  } finally {
+    clearTimeout(timeout)
+    lines.close()
+  }
+}
+
 function readResponse(url: string, method = 'GET') {
-  return new Promise<{ status?: number; type?: string; body: string }>(
+  return new Promise<{ status?: number; headers: IncomingHttpHeaders; body: string }>(
     (resolve, reject) => {
       const req = request(url, { method }, (res) => {
         let body = ''
@@ -18,7 +35,7 @@ function readResponse(url: string, method = 'GET') {
         res.on('end', () =>
           resolve({
             status: res.statusCode,
-            type: res.headers['content-type'],
+            headers: res.headers,
             body,
           }),
         )
@@ -30,7 +47,13 @@ function readResponse(url: string, method = 'GET') {
   )
 }
 
-it('serves unauthenticated JSON liveness over GET and an empty HEAD', async () => {
+const hasIpv6Loopback = Object.values(networkInterfaces()).some((addresses) =>
+  addresses?.some(({ address }) => address === '::1'),
+)
+
+const loopbackHosts = hasIpv6Loopback ? ['localhost', '::1'] : ['localhost']
+
+it.each(loopbackHosts)('serves unauthenticated liveness over GET and HEAD on %s', async (host) => {
   const fixture = await mkdtemp(join(tmpdir(), 'workspace-liveness-'))
   const dist = join(fixture, 'dist/server')
   try {
@@ -51,7 +74,8 @@ it('serves unauthenticated JSON liveness over GET and an empty HEAD', async () =
     const child = spawn(process.execPath, ['server-entry.js'], {
       cwd: fixture,
       env: {
-        HOST: 'localhost',
+        ...process.env,
+        HOST: host,
         PORT: '0',
         COOKIE_SECURE: '0',
         HERMES_PASSWORD: 'fixture-password',
@@ -61,25 +85,28 @@ it('serves unauthenticated JSON liveness over GET and an empty HEAD', async () =
     const exited = once(child, 'exit')
     try {
       const base = await Promise.race([
-        once(child.stdout, 'data').then(
-          ([output]) => String(output).match(/http:\/\/localhost:\d+/)?.[0],
-        ),
+        readStartupUrl(child.stdout),
         exited.then(([code]) => {
           throw new Error(`Workspace exited during startup (${code})`)
         }),
       ])
-      expect(base).toBeDefined()
-      expect(await readResponse(`${base}/api/healthcheck?probe=1`)).toEqual({
+      const headers = {
+        'content-type': 'application/json',
+        'cache-control': 'no-store, no-cache, must-revalidate, private',
+        pragma: 'no-cache',
+        expires: '0',
+      }
+      expect(await readResponse(`${base}/api/healthcheck?probe=1`)).toMatchObject({
         status: 200,
-        type: 'application/json',
+        headers,
         body: '{"ok":true}',
       })
-      expect(await readResponse(`${base}/api/healthcheck`, 'HEAD')).toEqual({
+      expect(await readResponse(`${base}/api/healthcheck`, 'HEAD')).toMatchObject({
         status: 200,
-        type: 'application/json',
+        headers,
         body: '',
       })
-      expect((await readResponse(`${base}/`)).type).toContain('text/html')
+      expect((await readResponse(`${base}/`)).headers['content-type']).toContain('text/html')
     } finally {
       child.kill()
       await exited
