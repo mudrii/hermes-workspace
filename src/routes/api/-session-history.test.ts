@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route as HistoryRoute } from './history'
+import { HermesHttpError } from '../../server/claude-dashboard-api'
 import { Route as SessionHistoryRoute } from './session-history'
 
 const { backend, dashboardFetch, isAuthenticated } = vi.hoisted(() => ({
@@ -108,5 +109,12 @@ describe('GET /api/session-history', () => {
       ok: false,
       error: expect.stringContaining('Database unavailable'),
     })
+  })
+})
+
+it('identifies Hermes HTTP errors in diagnostics', () => {
+  expect(new HermesHttpError('Upstream unavailable', 503)).toMatchObject({
+    name: 'HermesHttpError',
+    status: 503,
   })
 })
