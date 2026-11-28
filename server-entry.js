@@ -199,6 +199,19 @@ async function tryServeStatic(req, res) {
 }
 
 async function requestHandler(req, res) {
+  if (
+    (req.method === 'GET' || req.method === 'HEAD') &&
+    req.url?.split('?')[0] === '/api/healthcheck'
+  ) {
+    res.writeHead(200, {
+      ...ALWAYS_HEADERS,
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+    })
+    res.end(req.method === 'GET' ? '{"ok":true}' : undefined)
+    return
+  }
+
   // Try static files first (client assets)
   if (req.method === 'GET' || req.method === 'HEAD') {
     const served = await tryServeStatic(req, res)
@@ -290,7 +303,7 @@ async function requestHandler(req, res) {
 function listenOn(bindHost) {
   const httpServer = createServer(requestHandler)
   httpServer.listen(port, bindHost, () => {
-    console.log(`Hermes Workspace running at http://${bindHost}:${port}`)
+    console.log(`Hermes Workspace running at http://${bindHost}:${httpServer.address().port}`)
   })
   return httpServer
 }

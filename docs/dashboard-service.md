@@ -20,6 +20,8 @@ export HERMES_API_TOKEN=...
 
 ## Install
 
+Use `GET /api/healthcheck` to check process liveness. The route returns HTTP 200 and `{"ok":true}` without signing in. `HEAD` returns the same status with an empty body. Use the authenticated `/api/gateway-status` endpoint to check downstream connectivity.
+
 ```bash
 chmod +x scripts/install-dashboard-service.sh
 scripts/install-dashboard-service.sh
