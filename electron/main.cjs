@@ -158,9 +158,18 @@ async function checkForAppUpdates() {
 }
 
 function checkHttp(url, timeoutMs = 2500) {
+  let target
+  try {
+    target = new URL(url)
+  } catch {
+    return Promise.resolve(false)
+  }
+  if (target.protocol !== 'http:' && target.protocol !== 'https:') {
+    return Promise.resolve(false)
+  }
+  const transport = target.protocol === 'https:' ? https : http
   return new Promise((resolve) => {
-    const transport = url.startsWith('https://') ? https : http
-    const request = transport.get(url, { timeout: timeoutMs }, (response) => {
+    const request = transport.get(target, { timeout: timeoutMs }, (response) => {
       resolve((response.statusCode || 500) < 500)
       response.resume()
     })

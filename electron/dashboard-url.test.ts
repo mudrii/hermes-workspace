@@ -15,17 +15,18 @@ function desktopBackend(env: Record<string, string>, reachable: Set<string>) {
   >()
   const transport = (protocol: string) => ({
     get(
-      url: string,
+      url: string | URL,
       _options: unknown,
       respond: (reply: { statusCode: number; resume: () => void }) => void,
     ) {
-      probes.push({ protocol, url })
-      if (reachable.has(url)) {
+      const address = new URL(url).href
+      probes.push({ protocol, url: address })
+      if (reachable.has(address)) {
         respond({ statusCode: 200, resume: () => {} })
       }
       return {
         on(event: string, callback: () => void) {
-          if (event === 'error' && !reachable.has(url)) callback()
+          if (event === 'error' && !reachable.has(address)) callback()
         },
       }
     },
@@ -52,6 +53,7 @@ function desktopBackend(env: Record<string, string>, reachable: Set<string>) {
     https: transport('https'),
   }
   runInNewContext(source, {
+    URL,
     process: { env, platform: 'darwin' },
     require: (name: string) => modules[name] ?? load(name),
   })
@@ -62,10 +64,10 @@ function desktopBackend(env: Record<string, string>, reachable: Set<string>) {
 const gatewayHealth = 'http://127.0.0.1:8642/health'
 
 describe('Electron dashboard discovery', () => {
-  it('probes the explicitly configured HTTPS dashboard and keeps its base path', async () => {
+  it('probes a configured dashboard with an uppercase HTTPS scheme and keeps its base path', async () => {
     const status = 'https://dashboard.example/hermes/api/status'
     const app = desktopBackend(
-      { HERMES_DASHBOARD_URL: 'https://dashboard.example/hermes/' },
+      { HERMES_DASHBOARD_URL: 'HTTPS://dashboard.example/hermes/' },
       new Set([gatewayHealth, status]),
     )
 
