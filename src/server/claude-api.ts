@@ -15,6 +15,7 @@ import {
   probeGateway,
 } from './gateway-capabilities'
 import {
+  HermesHttpError,
   createSession as createDashboardSession,
   deleteSession as deleteDashboardSession,
   forkSession as forkDashboardSession,
@@ -75,7 +76,7 @@ async function claudeGet<T>(path: string): Promise<T> {
   const res = await fetch(`${CLAUDE_API}${path}`, { headers: _authHeaders() })
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    throw new Error(`Hermes Agent API ${path}: ${res.status} ${body}`)
+    throw new HermesHttpError(`Hermes Agent API ${path}: ${res.status} ${body}`, res.status)
   }
   return res.json() as Promise<T>
 }

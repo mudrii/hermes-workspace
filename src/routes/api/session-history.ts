@@ -14,6 +14,7 @@ import {
   toChatMessage,
 } from '../../server/claude-api'
 import { resolveSessionKey } from '../../server/session-utils'
+import { HermesHttpError } from '../../server/claude-dashboard-api'
 import { isAuthenticated } from '@/server/auth-middleware'
 import {
   getLocalMessages,
@@ -67,6 +68,12 @@ export const Route = createFileRoute('/api/session-history')({
             source: 'gateway',
           })
         } catch (error) {
+          if (error instanceof HermesHttpError && error.status === 404) {
+            return json(
+              { ok: false, messages: [], sessionKey: key, error: 'Session not found' },
+              { status: 404 },
+            )
+          }
           return json(
             {
               ok: false,
