@@ -92,6 +92,17 @@ describe('GET /api/profiles/read', () => {
     })
   })
 
+  it('returns a server error when a dashboard list item has no usable profile name', async () => {
+    vi.stubEnv('HERMES_DASHBOARD_URL', 'http://dashboard.test')
+    fetchDashboard.mockResolvedValue(Response.json({ profiles: [{}] }))
+
+    const response = await readProfile('removed-worker')
+    expect(response.status).toBe(500)
+    expect(await response.json()).toEqual({
+      error: 'Hermes dashboard returned an invalid profile list',
+    })
+  })
+
   it('keeps dashboard transport failures and non-OK responses distinguishable from a missing profile', async () => {
     vi.stubEnv('HERMES_DASHBOARD_URL', 'http://dashboard.test')
     fetchDashboard

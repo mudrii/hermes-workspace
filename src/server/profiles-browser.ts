@@ -107,6 +107,18 @@ function validateProfileIdentifier(name: string): string {
   return trimmed
 }
 
+function hasValidDashboardProfileName(profile: unknown): boolean {
+  if (
+    !profile || typeof profile !== 'object' ||
+    !('name' in profile) || typeof profile.name !== 'string'
+  ) return false
+  try {
+    return validateProfileIdentifier(profile.name) === profile.name
+  } catch {
+    return false
+  }
+}
+
 function safeReadText(filePath: string): string {
   return fs.readFileSync(filePath, 'utf-8')
 }
@@ -339,7 +351,7 @@ export async function readProfileWithFallback(
         is_default?: boolean
       }>
     } | null
-    if (!Array.isArray(data?.profiles)) {
+    if (!Array.isArray(data?.profiles) || !data.profiles.every(hasValidDashboardProfileName)) {
       throw new Error('Hermes dashboard returned an invalid profile list')
     }
     const match = data.profiles.find(
