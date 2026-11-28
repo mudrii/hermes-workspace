@@ -325,7 +325,9 @@ describe('gateway-capabilities', () => {
     process.env.HERMES_API_URL = 'http://gateway.test'
     process.env.HERMES_DASHBOARD_URL = dashboard
     let dashboardOnline = true
-    let boardResponse: Response | Error = Response.json({ columns: [] })
+    let boardResponse: Response | Error = Response.json({ columns: [] }, {
+      headers: { 'Content-Type': 'Application/JSON; charset=UTF-8' },
+    })
     fetchMock.mockImplementation((url: string) => {
       if (url === `${dashboard}/api/status`) {
         return dashboardOnline

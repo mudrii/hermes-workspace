@@ -656,7 +656,7 @@ async function probeKanban(dashboard: DashboardCapabilities['dashboard']): Promi
     if (dashboard.url !== CLAUDE_DASHBOARD_URL) return false
     if (res.status === 404 || res.status === 405) return false
     if (res.status === 401 || res.status === 403) return true
-    if (res.ok) return (res.headers.get('content-type') ?? '').includes('application/json')
+    if (res.ok) return (res.headers.get('content-type') ?? '').toLowerCase().includes('application/json')
   } catch {
     // A transport failure is not evidence that the selected board vanished.
   }
