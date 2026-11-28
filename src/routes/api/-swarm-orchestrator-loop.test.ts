@@ -49,11 +49,17 @@ with sqlite3.connect(sys.argv[1]) as db:
     const response = await POST({
       request: new Request('http://localhost/api/swarm-orchestrator-loop', {
         method: 'POST',
-        body: JSON.stringify({ workerIds: ['builder'], autoContinue: true, reviewWorkerId: 'reviewer' }),
+        body: JSON.stringify({ workerIds: ['builder', 'missing-worker'], autoContinue: true, reviewWorkerId: 'reviewer' }),
       }),
     })
 
-    await expect(response.json()).resolves.toMatchObject({ summary: { checkpointed: 1 } })
+    await expect(response.json()).resolves.toMatchObject({
+      summary: { checkpointed: 1, unavailable: 1 },
+      results: [
+        { workerId: 'builder', status: 'checkpointed' },
+        { workerId: 'missing-worker', status: 'unavailable' },
+      ],
+    })
     expect(dispatch).toHaveBeenCalledOnce()
     const [[url, init]] = dispatch.mock.calls
     expect(url.pathname).toBe('/api/swarm-dispatch')

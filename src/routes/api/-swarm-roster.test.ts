@@ -52,12 +52,14 @@ describe('/api/swarm-roster setup', () => {
 
     mkdirSync(join(profilesDir, 'swarm13'), { recursive: true })
     mkdirSync(join(profilesDir, 'builder'))
+    mkdirSync(join(profilesDir, 'swarm14'))
     const installed = await getRoster()
     expect(installed.pendingProfiles).toEqual([])
-    expect(installed.roster.workers).toHaveLength(2)
+    expect(installed.roster.workers).toHaveLength(3)
     expect(installed.roster.workers).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'swarm13', name: 'Test Worker' }),
       expect.objectContaining({ id: 'builder', model: '', mcpServers: [] }),
+      expect.objectContaining({ id: 'swarm14', model: '' }),
     ]))
   })
 
