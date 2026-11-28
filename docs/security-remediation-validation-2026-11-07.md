@@ -1,5 +1,13 @@
 # Security remediation validation — 2026-11-07
 
+## Follow-up — 2026-11-28
+
+The reviewed fixes are now on `maintenance/hermes-update-20261128`, based on official `main` at `c631425d`. The branch also updates `@tanstack/eslint-config` to 0.5.0, which declares support for ESLint 10. A frozen install, production build, all 750 tests, and both production and full `pnpm audit` checks pass with no known vulnerabilities.
+
+The running Workspace service was restarted with this build against Hermes Agent v0.23.5. It reports `zero-fork` mode, and authenticated gateway status, sessions, skills, and config endpoints return HTTP 200. An unauthenticated config request now returns HTTP 401; it returned 500 before this fix.
+
+Remaining checks: `pnpm peers check` reports `@emoji-mart/react@1.1.1` (through `@lobehub/ui`) declaring React 16–18 while this app uses React 19. `pnpm exec tsc --noEmit` reports 96 errors, and `pnpm lint` reports 1,822 errors and 189 warnings with the updated ESLint config. CI treats these checks as non-blocking. The v0.23.5 Agent lock now contains oauthlib 4.0.1, so the older fork-only oauthlib note below is historical.
+
 ## Follow-up — 2026-11-26
 
 The reviewed Workspace dependency fixes were committed to the fork's `security/dependency-updates-20261107` branch in [8c1235bb](https://github.com/mudrii/hermes-workspace/commit/8c1235bb). Electron, electron-builder, esbuild, and affected transitive packages were updated. A frozen install, production build, and all 750 tests pass; the full `pnpm audit` reports zero findings. The original ESLint configuration already reported 1,668 errors, and two existing peer mismatches remain (`@tanstack/eslint-config` with ESLint 10 and `@emoji-mart/react` with React 19). These need separate compatibility and lint work.
