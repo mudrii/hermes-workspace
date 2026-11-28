@@ -1,11 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const optionalFetch = vi.hoisted(() => vi.fn((
+  path: string,
+  init: RequestInit,
+  _route: string,
+  _isAbsent: (response: Response) => Promise<boolean>,
+) => fetch(`http://127.0.0.1:8642${path}`, { ...init, headers: {} })))
+
 vi.mock('../../server/gateway-capabilities', () => ({
   BEARER_TOKEN: '',
   CLAUDE_API: 'http://127.0.0.1:8642',
   dashboardFetch: vi.fn(),
   ensureGatewayProbed: vi.fn(async () => ({ dashboard: { available: false } })),
   getCapabilities: vi.fn(() => ({ dashboard: { available: false } })),
+  optionalGatewayFetch: optionalFetch,
 }))
 
 vi.mock('../../server/claude-api', () => ({
@@ -37,6 +45,19 @@ afterEach(() => {
 })
 
 describe('context usage estimation', () => {
+  it('caches a missing runtime endpoint without caching a missing session', async () => {
+    optionalFetch.mockResolvedValueOnce(Response.json({ context_length: 200000 }))
+
+    await readContextUsage('route-check')
+
+    const call = optionalFetch.mock.calls.find(([path]) => path.endsWith('/route-check/runtime'))
+    expect(call?.[2]).toBe('/api/sessions/:id/runtime')
+    const isAbsent = call?.[3]
+    expect(isAbsent).toBeTypeOf('function')
+    if (!isAbsent) throw new Error('Missing runtime response classifier')
+    await expect(isAbsent(Response.json({ error: 'Session not found' }, { status: 404 }))).resolves.toBe(false)
+    await expect(isAbsent(new Response('404: Not Found', { status: 404 }))).resolves.toBe(true)
+  })
   it('prefers live gateway runtime snapshots when the vanilla runtime endpoint is available', async () => {
     const fetchMock = vi.fn(async () =>
       new Response(

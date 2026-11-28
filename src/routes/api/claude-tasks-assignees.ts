@@ -7,7 +7,7 @@
  */
 import { createFileRoute } from '@tanstack/react-router'
 import { isAuthenticated } from '../../server/auth-middleware'
-import { BEARER_TOKEN, CLAUDE_API, CLAUDE_DASHBOARD_URL } from '../../server/gateway-capabilities'
+import { BEARER_TOKEN, CLAUDE_DASHBOARD_URL, optionalGatewayFetch } from '../../server/gateway-capabilities'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -104,13 +104,16 @@ function normalizeAssigneePayload(payload: unknown, humanReviewer: string | null
   return assignees
 }
 
-async function fetchJson(url: string): Promise<unknown | null> {
+async function fetchJson(
+  url: string,
+  fetchResponse: (url: string, init: RequestInit) => Promise<Response | null> = fetch,
+): Promise<unknown | null> {
   try {
-    const res = await fetch(url, {
+    const res = await fetchResponse(url, {
       signal: AbortSignal.timeout(2000),
       headers: authHeaders(),
     })
-    if (!res.ok) return null
+    if (!res?.ok) return null
     return await res.json()
   } catch {
     return null
@@ -134,7 +137,7 @@ export const Route = createFileRoute('/api/claude-tasks-assignees')({
         // already present on the board.
         const remotePayload =
           await fetchJson(`${CLAUDE_DASHBOARD_URL}/api/plugins/kanban/assignees`) ??
-          await fetchJson(`${CLAUDE_API}/api/tasks/assignees`)
+          await fetchJson('/api/tasks/assignees', optionalGatewayFetch)
         const remoteAssignees = remotePayload
           ? normalizeAssigneePayload(remotePayload, humanReviewer)
           : []

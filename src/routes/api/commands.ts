@@ -8,7 +8,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../server/auth-middleware'
-import { gatewayFetch } from '../../server/gateway-capabilities'
+import { optionalGatewayFetch } from '../../server/gateway-capabilities'
 
 export const Route = createFileRoute('/api/commands')({
   server: {
@@ -19,12 +19,13 @@ export const Route = createFileRoute('/api/commands')({
         }
 
         try {
-          const res = await gatewayFetch('/v1/commands')
+          const res = await optionalGatewayFetch('/v1/commands')
 
-          if (!res.ok) {
+          if (!res?.ok) {
+            const status = res?.status ?? 404
             return json(
-              { error: `Gateway responded with status ${res.status}` },
-              { status: res.status },
+              { error: `Gateway responded with status ${status}` },
+              { status },
             )
           }
 

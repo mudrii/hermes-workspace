@@ -91,6 +91,7 @@ export function setGatewayUrl(input: string | null | undefined): string {
     )
   }
   writeOverrides(overrides)
+  missingGatewayRoutes.clear()
   // Force reprobe on the next capability check.
   probePromise = null
   lastProbeAt = 0
@@ -257,6 +258,8 @@ let lastProbeAt = 0
 let lastLoggedSummary = ''
 let dashboardTokenPromise: Promise<string> | null = null
 let dashboardTokenCache = ''
+const missingGatewayRoutes = new Map<string, number>()
+const MISSING_GATEWAY_ROUTE_TTL_MS = 30 * 60_000
 
 /** Optional bearer token for authenticated gateway endpoints. */
 export const BEARER_TOKEN = process.env.HERMES_API_TOKEN || process.env.CLAUDE_API_TOKEN || ''
@@ -403,7 +406,33 @@ export async function gatewayFetch(
   return fetch(url, { ...init, headers })
 }
 
+/** Skip routes this gateway explicitly reported as absent. A resource-level
+ * 404 is only cacheable when the caller can identify the router's response. */
+export async function optionalGatewayFetch(
+  path: string,
+  init: RequestInit = {},
+  route = path,
+  isAbsent: (response: Response) => boolean | Promise<boolean> = (res) => res.status === 404,
+): Promise<Response | null> {
+  const key = `${CLAUDE_API} ${init.method ?? 'GET'} ${route}`
+  if ((missingGatewayRoutes.get(key) ?? 0) > Date.now()) return null
+  const response = await gatewayFetch(path, init)
+  if (await isAbsent(response)) {
+    missingGatewayRoutes.set(key, Date.now() + MISSING_GATEWAY_ROUTE_TTL_MS)
+  }
+  return response
+}
+
 // ── Probing ───────────────────────────────────────────────────────
+
+async function probeOptionalRoute(path: string): Promise<boolean> {
+  try {
+    const res = await optionalGatewayFetch(path, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
+    return res !== null && res.status !== 404 && res.status !== 403
+  } catch {
+    return false
+  }
+}
 
 async function probe(path: string): Promise<boolean> {
   try {
@@ -438,7 +467,7 @@ async function probe(path: string): Promise<boolean> {
  */
 async function probeEnhancedChatStream(): Promise<boolean> {
   try {
-    const res = await fetch(`${CLAUDE_API}/api/sessions/__probe__/chat/stream`, {
+    const res = await optionalGatewayFetch('/api/sessions/__probe__/chat/stream', {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: '{}',
@@ -448,7 +477,7 @@ async function probeEnhancedChatStream(): Promise<boolean> {
     // gateway 404s, anything in between 404s. Enhanced fork accepts POST
     // and returns either a 4xx structured error (validation) or starts a
     // stream; either way the path is registered.
-    if (res.status === 404 || res.status === 403) return false
+    if (!res || res.status === 404 || res.status === 403) return false
     // 405 = the path exists but POST is wrong. That's still vanilla — no
     // enhanced fork would 405 a POST to its own chat/stream endpoint.
     if (res.status === 405) return false
@@ -528,11 +557,10 @@ async function probeMcp(): Promise<boolean> {
     // fall through to gateway path
   }
   try {
-    const res = await fetch(`${CLAUDE_API}/api/mcp`, {
-      headers: authHeaders(),
+    const res = await optionalGatewayFetch('/api/mcp', {
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     })
-    return await validate(res)
+    return res ? await validate(res) : false
   } catch {
     return false
   }
@@ -844,11 +872,11 @@ export async function probeGateway(options?: {
       probe('/health'),
       probeChatCompletions(),
       probe('/v1/models'),
-      probe('/api/sessions'),
+      probeOptionalRoute('/api/sessions'),
       probeEnhancedChatStream(),
-      probe('/api/skills'),
-      probe('/api/config'),
-      probe('/api/jobs'),
+      probeOptionalRoute('/api/skills'),
+      probeOptionalRoute('/api/config'),
+      probeOptionalRoute('/api/jobs'),
       probeDashboard(),
     ])
 
@@ -920,6 +948,7 @@ export async function ensureGatewayProbed(): Promise<GatewayCapabilities> {
  * (for example after a docker compose restart). See #275.
  */
 export async function forceReprobeGateway(): Promise<GatewayCapabilities> {
+  missingGatewayRoutes.clear()
   return probeGateway({ force: true })
 }
 

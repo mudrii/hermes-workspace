@@ -320,6 +320,50 @@ describe('gateway-capabilities', () => {
     expect(caps.conductor).toBe(true)
   })
 
+  it('rechecks backend health without repeating absent legacy routes until reconnect', async () => {
+    const api = 'http://gateway.test'
+    const dashboard = 'http://dashboard.test'
+    process.env.HERMES_API_URL = api
+    process.env.HERMES_DASHBOARD_URL = dashboard
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${dashboard}/api/status`) return Response.json({ version: '0.23.5' })
+      if (url === `${dashboard}/api/sessions?limit=1`) return Response.json({ sessions: [] })
+      if (url === `${api}/v1/chat/completions`) return new Response(null, { status: 405 })
+      if (url === `${api}/health` || url === `${api}/v1/models`) return Response.json({})
+      return new Response('404: Not Found', { status: 404 })
+    })
+
+    const mod = await loadMod()
+    await mod.probeGateway({ force: true })
+    await mod.probeGateway({ force: true })
+    const requested = (url: string) => fetchMock.mock.calls.filter(([value]) => value === url).length
+    expect(requested(`${api}/health`)).toBeGreaterThanOrEqual(2)
+    expect(requested(`${api}/api/skills`)).toBe(1)
+    expect(requested(`${api}/api/config`)).toBe(1)
+    expect(requested(`${api}/api/mcp`)).toBe(1)
+    expect(requested(`${api}/api/sessions/__probe__/chat/stream`)).toBe(1)
+    await mod.forceReprobeGateway()
+    expect(requested(`${api}/api/sessions/__probe__/chat/stream`)).toBe(2)
+  })
+
+  it('distinguishes an absent runtime route from a missing session', async () => {
+    process.env.HERMES_API_URL = 'http://gateway.test'
+    process.env.HERMES_DASHBOARD_URL = 'http://dashboard.test'
+    fetchMock.mockImplementation((url: string) => {
+      if (url.endsWith('/missing/runtime')) {
+        return Response.json({ error: 'Session not found' }, { status: 404 })
+      }
+      return new Response('404: Not Found', { status: 404 })
+    })
+    const mod = await loadMod()
+    const route = '/api/sessions/:id/runtime'
+    const isRouterNotFound = async (res: Response) => res.status === 404 && (await res.text()) === '404: Not Found'
+    await mod.optionalGatewayFetch('/api/sessions/missing/runtime', {}, route, isRouterNotFound)
+    await mod.optionalGatewayFetch('/api/sessions/main/runtime', {}, route, isRouterNotFound)
+    expect(await mod.optionalGatewayFetch('/api/sessions/main/runtime', {}, route, isRouterNotFound)).toBeNull()
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/runtime'))).toHaveLength(2)
+  })
+
   describe('isLocalhostDeployment', () => {
     afterEach(() => {
       delete process.env.HOST

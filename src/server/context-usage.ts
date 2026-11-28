@@ -4,6 +4,7 @@ import {
   dashboardFetch,
   ensureGatewayProbed,
   getCapabilities,
+  optionalGatewayFetch,
 } from '@/server/gateway-capabilities'
 import { listSessions } from '@/server/claude-api'
 import { getLocalMessages, getLocalSession } from './local-session-store'
@@ -235,14 +236,16 @@ async function readGatewayRuntimeSnapshot(
   const sid = sessionId.trim()
   if (!sid) return null
   try {
-    const res = await fetch(
-      `${CLAUDE_API}/api/sessions/${encodeURIComponent(sid)}/runtime`,
+    const res = await optionalGatewayFetch(
+      `/api/sessions/${encodeURIComponent(sid)}/runtime`,
       {
-        headers: authHeaders(),
         signal: AbortSignal.timeout(2500),
       },
+      '/api/sessions/:id/runtime',
+      async (response) => response.status === 404 &&
+        (await response.clone().text()).trim() === '404: Not Found',
     )
-    if (!res.ok) return null
+    if (!res?.ok) return null
     const data = (await res.json()) as {
       model?: unknown
       context_tokens?: unknown
