@@ -346,6 +346,37 @@ describe('gateway-capabilities', () => {
     expect(requested(`${api}/api/sessions/__probe__/chat/stream`)).toBe(2)
   })
 
+  it('does not restore a stale route miss after reconnect', async () => {
+    const api = 'http://gateway.test'
+    const route = '/v1/commands'
+    process.env.HERMES_API_URL = api
+    let finishOldRequest!: (response: Response) => void
+    const oldResponse = new Promise<Response>((resolve) => { finishOldRequest = resolve })
+    let commandsRequests = 0
+    fetchMock.mockImplementation((url: string) => {
+      if (url !== `${api}${route}`) return new Response(null, { status: 404 })
+      commandsRequests++
+      return commandsRequests === 1 ? oldResponse : Response.json({ commands: [] })
+    })
+
+    const mod = await loadMod()
+    const first = mod.optionalGatewayFetch(route)
+    await mod.forceReprobeGateway()
+    finishOldRequest(new Response(null, { status: 404 }))
+    expect((await first)?.status).toBe(404)
+
+    expect((await mod.optionalGatewayFetch(route))?.status).toBe(200)
+  })
+
+  it('uses the same cache entry for methods that fetch normalizes', async () => {
+    fetchMock.mockReturnValue(new Response(null, { status: 404 }))
+    const mod = await loadMod()
+
+    await mod.optionalGatewayFetch('/optional', { method: 'post' })
+    expect(await mod.optionalGatewayFetch('/optional', { method: 'POST' })).toBeNull()
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/optional'))).toHaveLength(1)
+  })
+
   it('distinguishes an absent runtime route from a missing session', async () => {
     process.env.HERMES_API_URL = 'http://gateway.test'
     process.env.HERMES_DASHBOARD_URL = 'http://dashboard.test'

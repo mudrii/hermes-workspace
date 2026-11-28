@@ -91,7 +91,7 @@ export function setGatewayUrl(input: string | null | undefined): string {
     )
   }
   writeOverrides(overrides)
-  missingGatewayRoutes.clear()
+  missingGatewayRoutes = new Map()
   // Force reprobe on the next capability check.
   probePromise = null
   lastProbeAt = 0
@@ -258,7 +258,7 @@ let lastProbeAt = 0
 let lastLoggedSummary = ''
 let dashboardTokenPromise: Promise<string> | null = null
 let dashboardTokenCache = ''
-const missingGatewayRoutes = new Map<string, number>()
+let missingGatewayRoutes = new Map<string, number>()
 const MISSING_GATEWAY_ROUTE_TTL_MS = 30 * 60_000
 
 /** Optional bearer token for authenticated gateway endpoints. */
@@ -414,11 +414,18 @@ export async function optionalGatewayFetch(
   route = path,
   isAbsent: (response: Response) => boolean | Promise<boolean> = (res) => res.status === 404,
 ): Promise<Response | null> {
-  const key = `${CLAUDE_API} ${init.method ?? 'GET'} ${route}`
-  if ((missingGatewayRoutes.get(key) ?? 0) > Date.now()) return null
+  const method = init.method ?? 'GET'
+  // Match fetch's normalization while preserving case-sensitive extension methods.
+  const cacheMethod = /^(DELETE|GET|HEAD|OPTIONS|POST|PUT)$/i.test(method)
+    ? method.toUpperCase()
+    : method
+  const key = `${CLAUDE_API} ${cacheMethod} ${route}`
+  // In-flight requests only update the cache that was current when they started.
+  const cache = missingGatewayRoutes
+  if ((cache.get(key) ?? 0) > Date.now()) return null
   const response = await gatewayFetch(path, init)
   if (await isAbsent(response)) {
-    missingGatewayRoutes.set(key, Date.now() + MISSING_GATEWAY_ROUTE_TTL_MS)
+    cache.set(key, Date.now() + MISSING_GATEWAY_ROUTE_TTL_MS)
   }
   return response
 }
@@ -948,7 +955,7 @@ export async function ensureGatewayProbed(): Promise<GatewayCapabilities> {
  * (for example after a docker compose restart). See #275.
  */
 export async function forceReprobeGateway(): Promise<GatewayCapabilities> {
-  missingGatewayRoutes.clear()
+  missingGatewayRoutes = new Map()
   return probeGateway({ force: true })
 }
 
