@@ -320,6 +320,37 @@ describe('gateway-capabilities', () => {
     expect(caps.conductor).toBe(true)
   })
 
+  it('keeps a known Kanban board through failed capability probes', async () => {
+    const dashboard = 'http://dashboard.test'
+    process.env.HERMES_API_URL = 'http://gateway.test'
+    process.env.HERMES_DASHBOARD_URL = dashboard
+    let dashboardOnline = true
+    let boardResponse: Response | Error = Response.json({ columns: [] })
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${dashboard}/api/status`) {
+        return dashboardOnline
+          ? Response.json({ version: '0.23.5' })
+          : new Response(null, { status: 503 })
+      }
+      if (url === `${dashboard}/api/sessions?limit=1`) return Response.json({ sessions: [] })
+      if (url === `${dashboard}/api/plugins/kanban/board`) {
+        if (boardResponse instanceof Error) throw boardResponse
+        return boardResponse
+      }
+      return new Response(null, { status: 404 })
+    })
+
+    const mod = await loadMod()
+    expect((await mod.probeGateway({ force: true })).kanban).toBe(true)
+    boardResponse = new DOMException('Timed out', 'TimeoutError')
+    expect((await mod.probeGateway({ force: true })).kanban).toBe(true)
+    dashboardOnline = false
+    expect((await mod.probeGateway({ force: true })).kanban).toBe(true)
+    dashboardOnline = true
+    boardResponse = new Response(null, { status: 404 })
+    expect((await mod.probeGateway({ force: true })).kanban).toBe(false)
+  })
+
   describe('isLocalhostDeployment', () => {
     afterEach(() => {
       delete process.env.HOST

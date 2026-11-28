@@ -642,21 +642,25 @@ async function probeConductor(dashboardAvailable: boolean): Promise<boolean> {
  * SQLite-backed kanban DB. Mounted by hermes_cli.web_server
  * `_mount_plugin_api_routes()`. See v2.3.0 plan.
  */
-async function probeKanban(dashboardAvailable: boolean): Promise<boolean> {
-  if (!dashboardAvailable) return false
+async function probeKanban(dashboard: DashboardCapabilities['dashboard']): Promise<boolean> {
+  if (dashboard.url !== CLAUDE_DASHBOARD_URL) return false
+  const knownBoard = capabilities.kanban && capabilities.dashboard.url === dashboard.url
+  // Keep the selected dashboard board during an outage. Selecting a fallback
+  // here would send the next read or write to a different store.
+  if (!dashboard.available) return knownBoard
   try {
     const res = await dashboardFetch('/api/plugins/kanban/board', {
       method: 'GET',
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     })
+    if (dashboard.url !== CLAUDE_DASHBOARD_URL) return false
     if (res.status === 404 || res.status === 405) return false
-    // The plugin route is unauthenticated by design (loopback-only), so
-    // 200 is the normal success. Some auth setups may return 401 — still
-    // means the route exists.
-    return true
+    if (res.status === 401 || res.status === 403) return true
+    if (res.ok) return (res.headers.get('content-type') ?? '').includes('application/json')
   } catch {
-    return false
+    // A transport failure is not evidence that the selected board vanished.
   }
+  return dashboard.url === CLAUDE_DASHBOARD_URL && knownBoard
 }
 
 
@@ -859,7 +863,7 @@ export async function probeGateway(options?: {
 
     // Conductor probe runs after dashboard probe.
     const conductor = await probeConductor(dashboard.available)
-    const kanban = await probeKanban(dashboard.available)
+    const kanban = await probeKanban(dashboard)
 
     // Phase 1.5 fallback: when native /api/mcp is missing but the dashboard
     // exposes `config.mcp_servers` AND we are loopback-only, allow a config
