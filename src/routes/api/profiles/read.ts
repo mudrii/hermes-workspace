@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
 import { isAuthenticated } from '../../../server/auth-middleware'
-import { readProfileWithFallback } from '../../../server/profiles-browser'
+import { ProfileNotFoundError, readProfileWithFallback } from '../../../server/profiles-browser'
 
 export const Route = createFileRoute('/api/profiles/read')({
   server: {
@@ -16,6 +16,9 @@ export const Route = createFileRoute('/api/profiles/read')({
           const profile = await readProfileWithFallback(name)
           return json({ profile })
         } catch (error) {
+          if (error instanceof ProfileNotFoundError) {
+            return json({ error: error.message }, { status: 404 })
+          }
           return json(
             {
               error:

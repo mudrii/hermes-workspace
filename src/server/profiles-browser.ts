@@ -3,6 +3,13 @@ import os from 'node:os'
 import path from 'node:path'
 import YAML from 'yaml'
 
+export class ProfileNotFoundError extends Error {
+  constructor() {
+    super('Profile not found')
+    this.name = 'ProfileNotFoundError'
+  }
+}
+
 export type ProfileSummary = {
   name: string
   path: string
@@ -313,52 +320,51 @@ export async function readProfileWithFallback(
   // Filesystem miss — try dashboard API for split-host deployments
   const dashboardUrl = getDashboardUrl()
   if (dashboardUrl) {
-    try {
-      const token = getDashboardToken()
-      const headers: Record<string, string> = {}
-      if (token) headers['Authorization'] = `Bearer ${token}`
+    const token = getDashboardToken()
+    const headers: Record<string, string> = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
 
-      const response = await fetch(`${dashboardUrl}/api/profiles`, {
-        headers,
-        signal: AbortSignal.timeout(5000),
-      })
-      if (response.ok) {
-        const data = (await response.json()) as {
-          profiles?: Array<{
-            name: string
-            model?: string
-            provider?: string
-            description?: string
-            is_default?: boolean
-          }>
-        }
-        const match = data.profiles?.find(
-          (p) => p.name === normalized || (normalized === 'default' && p.is_default),
-        )
-        if (match) {
-          const active = getActiveProfileName()
-          return {
-            name: match.name,
-            path: match.is_default
-              ? getClaudeRoot()
-              : path.join(getProfilesRoot(), match.name),
-            active: match.name === active,
-            config: {
-              ...(match.model ? { model: match.model } : {}),
-              ...(match.provider ? { provider: match.provider } : {}),
-            },
-            description: match.description || '',
-            systemPrompt: '',
-            hasEnv: false,
-          }
-        }
+    const response = await fetch(`${dashboardUrl}/api/profiles`, {
+      headers,
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => null)
+    if (!response?.ok) throw new Error('Failed to read profiles from the Hermes dashboard')
+
+    const data = (await response.json().catch(() => null)) as {
+      profiles?: Array<{
+        name: string
+        model?: string
+        provider?: string
+        description?: string
+        is_default?: boolean
+      }>
+    } | null
+    if (!Array.isArray(data?.profiles)) {
+      throw new Error('Hermes dashboard returned an invalid profile list')
+    }
+    const match = data.profiles.find(
+      (p) => p.name === normalized || (normalized === 'default' && p.is_default),
+    )
+    if (match) {
+      const active = getActiveProfileName()
+      return {
+        name: match.name,
+        path: match.is_default
+          ? getClaudeRoot()
+          : path.join(getProfilesRoot(), match.name),
+        active: match.name === active,
+        config: {
+          ...(match.model ? { model: match.model } : {}),
+          ...(match.provider ? { provider: match.provider } : {}),
+        },
+        description: match.description || '',
+        systemPrompt: '',
+        hasEnv: false,
       }
-    } catch {
-      // Dashboard unreachable — fall through to error
     }
   }
 
-  throw new Error('Profile not found')
+  throw new ProfileNotFoundError()
 }
 
 export function getActiveProfileName(): string {
@@ -503,7 +509,7 @@ export function readProfile(name: string): ProfileDetail {
     normalized === 'default'
       ? getClaudeRoot()
       : path.join(getProfilesRoot(), validateProfileName(normalized))
-  if (!fs.existsSync(profilePath)) throw new Error('Profile not found')
+  if (!fs.existsSync(profilePath)) throw new ProfileNotFoundError()
   const configPath = path.join(profilePath, 'config.yaml')
   const envPath = path.join(profilePath, '.env')
   const sessionsDir = path.join(profilePath, 'sessions')
