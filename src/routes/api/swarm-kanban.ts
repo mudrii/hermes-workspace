@@ -54,11 +54,21 @@ export const Route = createFileRoute('/api/swarm-kanban')({
   server: {
     handlers: {
       GET: async () => {
-        return json({
-          ok: true,
-          cards: await listKanbanCards(),
-          backend: getKanbanBackendMeta(),
-        })
+        try {
+          return json({
+            ok: true,
+            cards: await listKanbanCards(),
+            backend: getKanbanBackendMeta(),
+          })
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'TimeoutError') {
+            return json(
+              { ok: false, error: 'Kanban backend timed out' },
+              { status: 504 },
+            )
+          }
+          throw error
+        }
       },
       POST: async ({ request }) => {
         let body: unknown
