@@ -4,6 +4,7 @@ const fs = require('fs')
 const { existsSync } = fs
 const { spawn, execSync } = require('child_process')
 const http = require('http')
+const https = require('https')
 let autoUpdater = null
 try {
   ;({ autoUpdater } = require('electron-updater'))
@@ -21,7 +22,10 @@ const AIONCORE_BASE_URL = (
 ).replace(/\/$/, '')
 const AIONCORE_URL = `${AIONCORE_BASE_URL}/health`
 const HERMES_GATEWAY_URL = 'http://127.0.0.1:8642/health'
-const HERMES_DASHBOARD_URL = 'http://127.0.0.1:9119/api/status'
+const configuredDashboard =
+  process.env.HERMES_DASHBOARD_URL?.trim() || process.env.CLAUDE_DASHBOARD_URL?.trim()
+const dashboardBase = (configuredDashboard || 'http://127.0.0.1:9119').replace(/\/+$/, '')
+const HERMES_DASHBOARD_URL = `${dashboardBase}/api/status`
 const HERMES_INSTALL_SCRIPT =
   'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash -s -- --skip-setup'
 
@@ -155,7 +159,8 @@ async function checkForAppUpdates() {
 
 function checkHttp(url, timeoutMs = 2500) {
   return new Promise((resolve) => {
-    const request = http.get(url, { timeout: timeoutMs }, (response) => {
+    const transport = url.startsWith('https://') ? https : http
+    const request = transport.get(url, { timeout: timeoutMs }, (response) => {
       resolve((response.statusCode || 500) < 500)
       response.resume()
     })
@@ -374,12 +379,8 @@ async function ensureHermesBackend() {
   if (!gatewayReachable) {
     spawnDetached('hermes gateway run', 'gateway')
   }
-  if (!dashboardReachable) {
-    const dashboardCmd =
-      process.platform === 'win32'
-        ? 'hermes dashboard --port 9119 --host 127.0.0.1 --no-open'
-        : 'hermes dashboard --port 9119 --host 127.0.0.1 --no-open'
-    spawnDetached(dashboardCmd, 'dashboard')
+  if (!dashboardReachable && !configuredDashboard) {
+    spawnDetached('hermes dashboard --port 9119 --host 127.0.0.1 --no-open', 'dashboard')
   }
 
   return {
@@ -417,8 +418,7 @@ function startLocalServer() {
           PORT: String(APP_PORT),
           HERMES_WORKSPACE_DESKTOP: '1',
           HERMES_API_URL: process.env.HERMES_API_URL || 'http://127.0.0.1:8642',
-          HERMES_DASHBOARD_URL:
-            process.env.HERMES_DASHBOARD_URL || 'http://127.0.0.1:9119',
+          HERMES_DASHBOARD_URL: dashboardBase,
         },
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       },

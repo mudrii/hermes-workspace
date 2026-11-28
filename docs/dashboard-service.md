@@ -18,6 +18,8 @@ export HERMES_DASHBOARD_URL=http://127.0.0.1:9119
 export HERMES_API_TOKEN=...
 ```
 
+The Electron launcher reads `HERMES_DASHBOARD_URL` from its process environment, with `CLAUDE_DASHBOARD_URL` as a legacy alias. It passes the same dashboard base URL to the bundled server. When neither variable is set, the launcher uses port 9119 and starts a local dashboard if needed.
+
 ## Install
 
 ```bash
