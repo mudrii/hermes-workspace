@@ -374,7 +374,6 @@ export const Route = createFileRoute('/api/swarm-orchestrator-loop')({
         const requested = validWorkerIds(body.workerIds)
         const installedWorkerIds = listSwarmWorkerIds()
         const workerIds = requested.length ? requested : installedWorkerIds
-        const runnableWorkerIds = workerIds.filter((workerId) => installedWorkerIds.includes(workerId))
         const staleMinutes = typeof body.staleMinutes === 'number' && Number.isFinite(body.staleMinutes)
           ? Math.max(1, Math.min(240, body.staleMinutes))
           : 10
@@ -419,10 +418,10 @@ export const Route = createFileRoute('/api/swarm-orchestrator-loop')({
         let continuation: unknown | null = null
         if (autoContinue && !dryRun) {
           const assignments = buildStaleAssignments(results)
-          assignments.push(...buildNextActionAssignments(results, runnableWorkerIds, allowExecution))
-          const reviewerId = chooseReviewer(runnableWorkerIds, body.reviewWorkerId)
-          const hasReviewerDone = results.some((item) => item.status === 'checkpointed' && item.checkpoint?.stateLabel === 'DONE' && isReviewer(item.workerId, runnableWorkerIds))
-          const reviewAssignment = reviewerId && !hasReviewerDone ? buildReviewAssignment(results, reviewerId, runnableWorkerIds) : null
+          assignments.push(...buildNextActionAssignments(results, installedWorkerIds, allowExecution))
+          const reviewerId = chooseReviewer(installedWorkerIds, body.reviewWorkerId)
+          const hasReviewerDone = results.some((item) => item.status === 'checkpointed' && item.checkpoint?.stateLabel === 'DONE' && isReviewer(item.workerId, installedWorkerIds))
+          const reviewAssignment = reviewerId && !hasReviewerDone ? buildReviewAssignment(results, reviewerId, installedWorkerIds) : null
           if (reviewAssignment && !assignments.some((item) => item.workerId === reviewAssignment.workerId && item.task === reviewAssignment.task)) assignments.push(reviewAssignment)
           continuation = await dispatchAssignments(request, assignments, missionId)
         }

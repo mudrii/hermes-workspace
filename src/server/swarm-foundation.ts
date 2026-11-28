@@ -455,7 +455,15 @@ export function listSwarmWorkerIds(options?: { swarmOnly?: boolean }): Array<str
   if (!fs.existsSync(profilesDir)) return []
   const entries = fs.readdirSync(profilesDir, { withFileTypes: true })
   return entries
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => {
+      if (entry.isDirectory()) return true
+      if (!entry.isSymbolicLink()) return false
+      try {
+        return fs.statSync(path.join(profilesDir, entry.name)).isDirectory()
+      } catch {
+        return false
+      }
+    })
     .map((entry) => entry.name)
     .filter((name) => (options?.swarmOnly ?? false ? isSwarmWorkerId(name) : true))
     .sort()

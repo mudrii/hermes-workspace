@@ -134,13 +134,15 @@ export function RouterChat({
     }
   }, [mode, selectedId, assignments.length, prompt])
 
+  const activeRoomIds = roomIds.filter((id) => members.some((member) => member.id === id))
+
   if (!open) {
     if (!showClosedDock || !onOpen) return null
 
     const targetLabel = selectedId
       ? selectedId
-      : roomIds.length
-        ? `${roomIds.length} in room`
+      : activeRoomIds.length
+        ? `${activeRoomIds.length} in room`
         : `${members.length} workers`
 
     return (
@@ -223,7 +225,7 @@ export function RouterChat({
         },
       ]
     } else {
-      const targets = roomIds.length > 0 ? roomIds : members.map((m) => m.id)
+      const targets = activeRoomIds.length > 0 ? activeRoomIds : members.map((m) => m.id)
       plan = targets.map((id) => ({
         workerId: id,
         task: prompt.trim(),
@@ -375,7 +377,7 @@ export function RouterChat({
                     ? 'auto-route by role'
                     : mode === 'manual'
                       ? `→ ${selectedId ?? 'no target'}`
-                      : `broadcast to ${roomIds.length || members.length}`}`}
+                      : `broadcast to ${activeRoomIds.length || members.length}`}`}
                 </div>
               )}
               <div className="flex items-center gap-2">
@@ -415,7 +417,7 @@ export function RouterChat({
                     : mode === 'manual'
                       ? `Send to ${selectedId ?? '—'}`
                       : mode === 'broadcast'
-                        ? `Broadcast to ${roomIds.length || members.length}`
+                        ? `Broadcast to ${activeRoomIds.length || members.length}`
                         : 'Route mission'}
                 </button>
               </div>

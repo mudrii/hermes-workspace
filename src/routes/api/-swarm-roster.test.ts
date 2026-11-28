@@ -1,24 +1,25 @@
-import { copyFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let configDir: string
-const { listSwarmWorkerIds } = vi.hoisted(() => ({ listSwarmWorkerIds: vi.fn<() => Array<string>>() }))
+let profilesDir: string
 
 vi.mock('@tanstack/react-router', () => ({ createFileRoute: () => (options: unknown) => options }))
 vi.mock('../../server/auth-middleware', () => ({ isAuthenticated: () => true }))
-vi.mock('../../server/swarm-environment', () => ({ SWARM_CANONICAL_REPO: configDir }))
-vi.mock('../../server/swarm-foundation', () => ({ listSwarmWorkerIds }))
 
 beforeEach(() => {
   vi.resetModules()
   configDir = mkdtempSync(join(tmpdir(), 'workspace-roster-test-'))
+  vi.doMock('../../server/swarm-environment', () => ({ SWARM_CANONICAL_REPO: configDir }))
   copyFileSync(new URL('../../../swarm.yaml', import.meta.url), join(configDir, 'swarm.yaml'))
-  listSwarmWorkerIds.mockReturnValue([])
+  vi.stubEnv('HERMES_HOME', configDir)
+  profilesDir = join(configDir, 'profiles')
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   rmSync(configDir, { recursive: true, force: true })
 })
 
@@ -49,7 +50,8 @@ describe('/api/swarm-roster setup', () => {
     await expect(response.json()).resolves.toMatchObject(awaitingProfile)
     await expect(getRoster()).resolves.toMatchObject(awaitingProfile)
 
-    listSwarmWorkerIds.mockReturnValue(['swarm13', 'builder'])
+    mkdirSync(join(profilesDir, 'swarm13'), { recursive: true })
+    mkdirSync(join(profilesDir, 'builder'))
     const installed = await getRoster()
     expect(installed.pendingProfiles).toEqual([])
     expect(installed.roster.workers).toHaveLength(2)
@@ -57,5 +59,27 @@ describe('/api/swarm-roster setup', () => {
       expect.objectContaining({ id: 'swarm13', name: 'Test Worker' }),
       expect.objectContaining({ id: 'builder', model: '', mcpServers: [] }),
     ]))
+  })
+
+  it('retains configured roles for linked profile directories', async () => {
+    const { Route } = await import('./swarm-roster')
+    const { GET } = (Route as unknown as {
+      server: { handlers: { GET: (context: { request: Request }) => Promise<Response> } }
+    }).server.handlers
+    const url = 'http://localhost/api/swarm-roster'
+    const linkedProfile = join(configDir, 'linked-profile')
+    mkdirSync(profilesDir)
+    mkdirSync(linkedProfile)
+    symlinkSync(linkedProfile, join(profilesDir, 'builder'), 'junction')
+    const nonProfile = join(configDir, 'file')
+    writeFileSync(nonProfile, '')
+    symlinkSync(nonProfile, join(profilesDir, 'swarm13'), 'file')
+
+    const response = await GET({ request: new Request(url) })
+
+    await expect(response.json()).resolves.toMatchObject({
+      roster: { workers: [{ id: 'builder', role: 'Scoped Implementation Agent' }] },
+      pendingProfiles: [],
+    })
   })
 })
