@@ -63,7 +63,7 @@ Each worker profile can include:
 
 The roster and runtime APIs use that profile shape to populate worker cards, runtime state, model labels, tmux session names, checkpoint status, and recent summaries.
 
-If a worker exists in the roster but has no local profile, it can still appear as roster-only. Create or import the profile before expecting persistent memory, skill loading, or tmux launch to work.
+Saved workers without a local profile appear in **Workers awaiting profiles**. Create or import a matching profile to add the worker to the dispatch roster. Stock entries marked `template: true` in `swarm.yaml` stay hidden until a matching profile exists or you save the worker through Add Swarm.
 
 ## 5. Spawn a tmux-backed worker
 
@@ -74,11 +74,11 @@ In the workspace:
 1. Open Swarm Mode.
 2. Choose Add Swarm.
 3. Pick a role preset.
-4. Set worker ID, display name, model, specialty, mission, and skills.
-5. Save.
+4. Set the worker ID, display name, specialty, mission, and skills. Choose a model only if this worker needs an override.
+5. Save and create or import a Hermes profile with the same worker ID if it is missing.
 6. Start the worker session from the card or Runtime view.
 
-The role presets fill the important defaults: role, specialty, mission, system prompt, skills, and default model. You can edit them before saving.
+Role presets supply specialty, mission, system prompt, and skills. When the model field is blank, the profile supplies the model. Configure any MCP server the role needs in Hermes, including GBrain for roles that use it.
 
 ## 6. Dispatch the first task
 

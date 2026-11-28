@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { SwarmRosterSchema, SwarmRosterUpsertSchema, isSwarmWorkerId } from './swarm-roster'
+import { SwarmRosterSchema, SwarmRosterUpsertSchema, isSwarmWorkerId, readInstalledSwarmRoster } from './swarm-roster'
 
 describe('swarm roster semantic workers', () => {
+  it('keeps templates out of the installed roster until their profile exists', () => {
+    expect(readInstalledSwarmRoster([]).workers).toEqual([])
+    const roster = readInstalledSwarmRoster(['builder'])
+    expect(roster.workers.map((worker) => worker.id)).toEqual(['builder'])
+    expect(roster.workers[0].wrapper).toBe('builder:task')
+  })
+
   it('accepts both legacy swarm ids and semantic profile ids for upsert', () => {
     const baseWorker = {
       name: 'Builder',

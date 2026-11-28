@@ -19,10 +19,11 @@ const WorkerIdSchema = z
 
 export const SwarmRosterWorkerSchema = z.object({
   id: WorkerIdSchema,
+  template: z.boolean().optional(),
   name: z.string().default(''),
   role: z.string().default('Worker'),
   specialty: z.string().default(''),
-  model: z.string().default('Worker'),
+  model: z.string().default(''),
   mission: z.string().default('Awaiting orchestrator dispatch.'),
   profile: WorkerIdSchema.optional(),
   modes: z.array(z.string()).default([]),
@@ -49,9 +50,7 @@ export const SwarmRosterSchema = z.object({
 export type SwarmRosterWorker = z.infer<typeof SwarmRosterWorkerSchema>
 export type SwarmRoster = z.infer<typeof SwarmRosterSchema>
 
-export const SwarmRosterUpsertSchema = SwarmRosterWorkerSchema.extend({
-  id: WorkerIdSchema,
-})
+export const SwarmRosterUpsertSchema = SwarmRosterWorkerSchema.omit({ template: true })
 
 export type SwarmRosterUpsert = z.infer<typeof SwarmRosterUpsertSchema>
 
@@ -126,6 +125,20 @@ export function readSwarmRoster(ids: Array<string> = []): SwarmRoster {
   } catch {
     return fallbackRoster(ids)
   }
+}
+
+export function getSwarmRosterStatus(roster: SwarmRoster, ids: Array<string>) {
+  const installed = new Set(ids)
+  return {
+    roster: { ...roster, workers: roster.workers.filter((worker) => installed.has(worker.id)) },
+    pendingProfiles: roster.workers
+      .filter((worker) => !worker.template && !installed.has(worker.id))
+      .map(({ id, name }) => ({ id, name })),
+  }
+}
+
+export function readInstalledSwarmRoster(ids: Array<string>): SwarmRoster {
+  return getSwarmRosterStatus(readSwarmRoster(ids), ids).roster
 }
 
 export function writeSwarmRoster(roster: SwarmRoster): void {

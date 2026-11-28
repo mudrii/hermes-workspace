@@ -6,7 +6,6 @@ Each role has:
 
 - specialty
 - default skills
-- default model
 - when to use it
 - canonical spec reference
 
@@ -18,21 +17,23 @@ Canonical project specs live in the swarm specs directory at:
 
 Use those specs as the source of truth for standing missions. The role preset is the fast-start shape; the project spec is the durable contract.
 
+Presets leave model selection to the worker profile. Use the Add Swarm model field for a worker-specific override.
+
 ## Preset summary
 
-| Preset | Default model | Use when |
-| --- | --- | --- |
-| Orchestrator | GPT-5.4 | You need dispatch, routing, drift detection, and escalation. |
-| Builder | GPT-5.5 | You need product code shipped with tests/build proof. |
-| Reviewer | GPT-5.4 | You need byte-verified review and merge readiness. |
-| Triage | GPT-5.5 | You need issues/PRs scored, reproduced, patched, or prepared. |
-| Lab | GPT-5.4 | You need isolated experiments or local-model benchmarking. |
-| Sage | GPT-5.5 | You need research, synthesis, scripts, or launch copy. |
-| Scribe | GPT-5.5 | You need docs, specs, handoffs, skills hygiene, memory curation. |
-| Foundation | GPT-5.4 | You need runtime, repair, infra, health, or lifecycle work. |
-| QA | GPT-5.4 | You need regression, smoke, expected-vs-actual verification. |
-| Mirror Integrations | GPT-5.4 | You need upstream sync, integrations, or asset packs. |
-| Custom | user-selected | You are creating a lane that does not fit an existing preset. |
+| Preset | Use when |
+| --- | --- |
+| Orchestrator | You need dispatch, routing, drift detection, and escalation. |
+| Builder | You need product code shipped with tests/build proof. |
+| Reviewer | You need byte-verified review and merge readiness. |
+| Triage | You need issues/PRs scored, reproduced, patched, or prepared. |
+| Lab | You need isolated experiments or local-model benchmarking. |
+| Sage | You need research, synthesis, scripts, or launch copy. |
+| Scribe | You need docs, specs, handoffs, skills hygiene, memory curation. |
+| Foundation | You need runtime, repair, infra, health, or lifecycle work. |
+| QA | You need regression, smoke, expected-vs-actual verification. |
+| Mirror Integrations | You need upstream sync, integrations, or asset packs. |
+| Custom | You are creating a lane that does not fit an existing preset. |
 
 ## Orchestrator
 
@@ -44,8 +45,6 @@ Default skills:
 - `swarm-worker-core`
 - `swarm-review-learning-loop`
 - `self-improvement`
-
-Default model: GPT-5.4
 
 When to use:
 
@@ -80,8 +79,6 @@ Default skills:
 - `swarm-worker-core`
 - `byte-verified-code-review`
 
-Default model: GPT-5.5
-
 When to use:
 
 - product UI
@@ -109,8 +106,6 @@ Default skills:
 - `swarm-worker-core`
 - `byte-verified-code-review`
 - `swarm-review-learning-loop`
-
-Default model: GPT-5.4
 
 When to use:
 
@@ -143,8 +138,6 @@ Default skills:
 - `byte-verified-code-review`
 - `swarm-review-learning-loop`
 
-Default model: GPT-5.5
-
 When to use:
 
 - issue backlog scan
@@ -173,8 +166,6 @@ Default skills:
 - `pc1-ollama-gguf-bench`
 - `swarm-bench-worker`
 
-Default model: GPT-5.4
-
 When to use:
 
 - local model testing
@@ -200,8 +191,6 @@ Default skills:
 - `swarm-worker-core`
 - `last30days`
 - `pdf-and-paper-deep-reading`
-
-Default model: GPT-5.5
 
 When to use:
 
@@ -230,8 +219,6 @@ Default skills:
 - `last30days`
 - `creative-writing`
 
-Default model: GPT-5.5
-
 When to use:
 
 - README updates
@@ -258,8 +245,6 @@ Specialty: infra, repair playbook, autopilot wiring.
 Default skills:
 
 - `swarm-worker-core`
-
-Default model: GPT-5.4
 
 When to use:
 
@@ -289,8 +274,6 @@ Default skills:
 - `swarm-worker-core`
 - `byte-verified-code-review`
 
-Default model: GPT-5.4
-
 When to use:
 
 - smoke tests
@@ -318,8 +301,6 @@ Default skills:
 - `claude-promo`
 - `songwriting-and-ai-music`
 
-Default model: GPT-5.4
-
 When to use:
 
 - upstream diff watching
@@ -341,8 +322,6 @@ Mirror Integrations is the lane for portable useful things, not random shiny dis
 Specialty: user-defined.
 
 Default skills: none.
-
-Default model: user-selected.
 
 When to use:
 
@@ -392,9 +371,8 @@ Use this routing rule:
 2. Give it a one-line specialty.
 3. Give it a standing mission.
 4. Choose default skills.
-5. Choose default model.
-6. Create a canonical project spec.
-7. Add it to this document.
-8. Dispatch a tiny smoke task and verify a checkpoint.
+5. Create a canonical project spec.
+6. Add it to this document.
+7. Dispatch a tiny smoke task and verify a checkpoint.
 
-If step 6 feels like too much work, the role probably is not real yet.
+If step 5 feels like too much work, the role probably is not real yet.

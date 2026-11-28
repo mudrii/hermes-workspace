@@ -11,7 +11,7 @@ import { appendMissionContinuation, markMissionAssignmentsReviewedByWorker, reco
 import { appendSwarmMemoryEvent } from '../../server/swarm-memory'
 import { publishSwarmActionPrompt, publishSwarmCheckpointNotification } from '../../server/swarm-notifications'
 import { applySwarmModeToLoopFlags, readSwarmMode } from '../../server/swarm-mode'
-import { isSwarmWorkerId, readSwarmRoster } from '../../server/swarm-roster'
+import { isSwarmWorkerId, readInstalledSwarmRoster } from '../../server/swarm-roster'
 
 type LoopRequest = {
   workerIds?: unknown
@@ -219,18 +219,18 @@ function runWorkerLoop(workerId: string, staleMs: number, dryRun: boolean): Work
 
 
 function isReviewer(workerId: string, allWorkerIds: Array<string>): boolean {
-  const worker = readSwarmRoster(allWorkerIds).workers.find((entry) => entry.id === workerId)
+  const worker = readInstalledSwarmRoster(allWorkerIds).workers.find((entry) => entry.id === workerId)
   return /review|qa|critic/i.test(`${worker?.role ?? ''} ${worker?.specialty ?? ''}`)
 }
 
 function chooseByRole(workerIds: Array<string>, pattern: RegExp): string | null {
-  const roster = readSwarmRoster(workerIds)
+  const roster = readInstalledSwarmRoster(workerIds)
   const worker = roster.workers.find((entry) => pattern.test(`${entry.role} ${entry.specialty}`))
   return worker?.id ?? null
 }
 
 function chooseReviewer(workerIds: Array<string>, requested: unknown): string | null {
-  if (typeof requested === 'string' && isSwarmWorkerId(requested)) return requested.trim()
+  if (typeof requested === 'string' && workerIds.includes(requested.trim())) return requested.trim()
   if (workerIds.includes('reviewer')) return 'reviewer'
   if (workerIds.includes('swarm6')) return 'swarm6'
   return chooseByRole(workerIds, /review|qa|critic/i)
@@ -372,7 +372,9 @@ export const Route = createFileRoute('/api/swarm-orchestrator-loop')({
         }
 
         const requested = validWorkerIds(body.workerIds)
-        const workerIds = requested.length ? requested : listSwarmWorkerIds()
+        const installedWorkerIds = listSwarmWorkerIds()
+        const workerIds = requested.length ? requested : installedWorkerIds
+        const runnableWorkerIds = workerIds.filter((workerId) => installedWorkerIds.includes(workerId))
         const staleMinutes = typeof body.staleMinutes === 'number' && Number.isFinite(body.staleMinutes)
           ? Math.max(1, Math.min(240, body.staleMinutes))
           : 10
@@ -417,10 +419,10 @@ export const Route = createFileRoute('/api/swarm-orchestrator-loop')({
         let continuation: unknown | null = null
         if (autoContinue && !dryRun) {
           const assignments = buildStaleAssignments(results)
-          assignments.push(...buildNextActionAssignments(results, workerIds, allowExecution))
-          const reviewerId = chooseReviewer(workerIds, body.reviewWorkerId)
-          const hasReviewerDone = results.some((item) => item.status === 'checkpointed' && item.checkpoint?.stateLabel === 'DONE' && isReviewer(item.workerId, workerIds))
-          const reviewAssignment = reviewerId && !hasReviewerDone ? buildReviewAssignment(results, reviewerId, workerIds) : null
+          assignments.push(...buildNextActionAssignments(results, runnableWorkerIds, allowExecution))
+          const reviewerId = chooseReviewer(runnableWorkerIds, body.reviewWorkerId)
+          const hasReviewerDone = results.some((item) => item.status === 'checkpointed' && item.checkpoint?.stateLabel === 'DONE' && isReviewer(item.workerId, runnableWorkerIds))
+          const reviewAssignment = reviewerId && !hasReviewerDone ? buildReviewAssignment(results, reviewerId, runnableWorkerIds) : null
           if (reviewAssignment && !assignments.some((item) => item.workerId === reviewAssignment.workerId && item.task === reviewAssignment.task)) assignments.push(reviewAssignment)
           continuation = await dispatchAssignments(request, assignments, missionId)
         }

@@ -193,9 +193,12 @@ type SwarmRosterWorker = {
   reviewRequired?: boolean
 }
 
+type PendingSwarmProfile = Pick<SwarmRosterWorker, 'id' | 'name'>
+
 type SwarmRosterResponse = {
   ok?: boolean
   roster?: { workers?: Array<SwarmRosterWorker> }
+  pendingProfiles?: Array<PendingSwarmProfile>
 }
 
 type SwarmMissionSummary = {
@@ -237,7 +240,6 @@ type RolePreset = {
   mission: string
   systemPrompt: string
   skills: Array<string>
-  defaultModel?: string
 }
 
 const ROLE_PRESETS: ReadonlyArray<RolePreset> = [
@@ -247,7 +249,6 @@ const ROLE_PRESETS: ReadonlyArray<RolePreset> = [
     mission: 'Run the swarm. Read /swarm-specs/ at start. Dispatch workers per their standing missions. Detect drift, re-prompt, escalate to main agent when stuck.',
     systemPrompt: 'You are the Hermes Agent orchestrator for the swarm. Read /swarm-specs/SWARM_SPEC.md and /swarm-specs/projects/swarmN.md for every worker before dispatching. Apply the swarm-orchestrator skill: assign work, request proof-bearing checkpoints, detect drift, re-prompt with stronger framing, escalate when blocked. Never make irreversible external actions without main-agent ack.',
     skills: ['swarm-orchestrator', 'swarm-worker-core', 'swarm-review-learning-loop', 'self-improvement'],
-    defaultModel: 'GPT-5.4',
   },
   {
     role: 'Builder',
@@ -255,7 +256,6 @@ const ROLE_PRESETS: ReadonlyArray<RolePreset> = [
     mission: 'Implement features per dispatched briefs. Smallest landed artifact first. Tests + build + smoke before checkpoint.',
     systemPrompt: 'You are a senior builder. Ship working code. Always read the brief, plan smallest landed artifact, implement, run tests + build + smoke, commit (not push), checkpoint with proof.',
     skills: ['swarm-worker-core', 'byte-verified-code-review'],
-    defaultModel: 'GPT-5.5',
   },
   {
     role: 'Reviewer',
@@ -263,7 +263,6 @@ const ROLE_PRESETS: ReadonlyArray<RolePreset> = [
     mission: 'No PR ships without you. Verify diff, byte-check naming, run tests/build/smoke, verdict APPROVED/CHANGES_REQUESTED/BLOCKED.',
     systemPrompt: 'You are the merge gate. For every PR: pull branch, read diff, xxd byte-check naming-sensitive areas, run tests, run build, smoke test. Verdict APPROVED routes to main agent for merge ack. Never merge yourself.',
     skills: ['swarm-worker-core', 'byte-verified-code-review', 'swarm-review-learning-loop'],
-    defaultModel: 'GPT-5.4',
   },
   {
     role: 'Triage',
@@ -271,7 +270,6 @@ const ROLE_PRESETS: ReadonlyArray<RolePreset> = [
     mission: 'Score open issues every 4h, repro top-1, fix branch + tests + PR, request review. Never merge or close.',
     systemPrompt: 'You are the issues/PRs autopilot. Every 4h: gh issue list per repo, score by Impact x Tractability x (1 + locally-tested), pick top-1 unassigned, repro, fix branch, push, gh pr create, request reviewer. Never merge, never close, always escalate to main agent for greenlight.',
     skills: ['swarm-worker-core', 'byte-verified-code-review', 'swarm-review-learning-loop'],
-    defaultModel: 'GPT-5.5',
   },
   {
     role: 'Lab',
@@ -279,7 +277,6 @@ const ROLE_PRESETS: ReadonlyArray<RolePreset> = [
     mission: 'Run autonomous lab loop. Test new model pulls. Wire spec-dec/DFlash/TurboQuant. Push tk/s + quality. Document every experiment.',
     systemPrompt: 'You are the local-model lab. Read /swarm-specs/projects/lane-c-lab.md. Iterate experiments from open hypothesis space. Log to lab-loop-runs.jsonl. Escalate breakthroughs (>=10% tk/s) and install requests to main agent.',
     skills: ['swarm-worker-core', 'pc1-ollama-gguf-bench', 'swarm-bench-worker'],
-    defaultModel: 'GPT-5.4',
   },
   {
     role: 'Sage',
@@ -287,7 +284,6 @@ const ROLE_PRESETS: ReadonlyArray<RolePreset> = [
     mission: 'Research what matters. Draft scripts, X content, briefs. Cite sources. Never post externally without ack.',
     systemPrompt: 'You are the research/content scout. Find angles, write scripts and drafts, always cite sources. Never post X/Discord/blog without main-agent ack — always draft + escalate.',
     skills: ['swarm-worker-core', 'last30days', 'pdf-and-paper-deep-reading'],
-    defaultModel: 'GPT-5.5',
   },
   {
     role: 'Scribe',
@@ -295,7 +291,6 @@ const ROLE_PRESETS: ReadonlyArray<RolePreset> = [
     mission: 'Keep docs current. Hygiene the skills folder. Curate memory. Write submission/release copy.',
     systemPrompt: 'You are the source-of-truth keeper. Audit /skills/ every 12h, flag stale/unused/poorly-documented. Maintain SWARM_SPEC and worker specs as system evolves. Draft READMEs and changelogs.',
     skills: ['swarm-worker-core', 'last30days', 'creative-writing'],
-    defaultModel: 'GPT-5.5',
   },
   {
     role: 'Foundation',
@@ -303,7 +298,6 @@ const ROLE_PRESETS: ReadonlyArray<RolePreset> = [
     mission: 'Keep the swarm running. Apply repair playbook. Wire autopilot. Maintain loop infra.',
     systemPrompt: 'You are infrastructure. Maintain /swarm-specs/playbooks/auto-repair.yaml. Health-check tmux sessions, autopilot tick, dev server. Apply known fixes; escalate novel failures.',
     skills: ['swarm-worker-core'],
-    defaultModel: 'GPT-5.4',
   },
   {
     role: 'QA',
@@ -311,7 +305,6 @@ const ROLE_PRESETS: ReadonlyArray<RolePreset> = [
     mission: 'Run regression suite on every commit + render. Block bad ships.',
     systemPrompt: 'You are QA. On commit: full test suite. On render: ffprobe + tone consistency + pacing. Verdict PASS/FAIL/FLAKY with evidence.',
     skills: ['swarm-worker-core', 'byte-verified-code-review'],
-    defaultModel: 'GPT-5.4',
   },
   {
     role: 'Mirror Integrations',
@@ -319,7 +312,6 @@ const ROLE_PRESETS: ReadonlyArray<RolePreset> = [
     mission: 'Generate assets. Watch upstream. Pack integrations.',
     systemPrompt: 'You produce assets and watch upstream. Generate art/audio per Lane A. Every 12h diff upstream Hermes Agent main, surface portable items. Never cross-org PR without ack.',
     skills: ['swarm-worker-core', 'claude-promo', 'songwriting-and-ai-music'],
-    defaultModel: 'GPT-5.4',
   },
   {
     role: 'Custom',
@@ -362,11 +354,14 @@ async function fetchHealth(): Promise<HealthData> {
   return res.json()
 }
 
-async function fetchRoster(): Promise<Array<SwarmRosterWorker>> {
+async function fetchRoster() {
   const res = await fetch('/api/swarm-roster')
   if (!res.ok) throw new Error(`Roster request failed: ${res.status}`)
   const data = (await res.json()) as SwarmRosterResponse
-  return Array.isArray(data.roster?.workers) ? data.roster!.workers! : []
+  return {
+    workers: Array.isArray(data.roster?.workers) ? data.roster.workers : [],
+    pendingProfiles: Array.isArray(data.pendingProfiles) ? data.pendingProfiles : [],
+  }
 }
 
 async function fetchMissions(): Promise<Array<SwarmMissionSummary>> {
@@ -1147,7 +1142,7 @@ export function Swarm2Screen() {
   const members = useMemo(() => {
     const merged = sortSwarmMembers(crew, roomIds).map((member) => {
       const runtime = runtimeByWorker.get(member.id)
-      const roster = rosterQuery.data?.find((worker) => worker.id === member.id)
+      const roster = rosterQuery.data?.workers.find((worker) => worker.id === member.id)
       return {
         ...member,
         displayName: runtime?.displayName || roster?.name || member.displayName,
@@ -1160,7 +1155,7 @@ export function Swarm2Screen() {
       }
     })
     const seen = new Set(merged.map((member) => member.id))
-    const extras = (rosterQuery.data ?? [])
+    const extras = (rosterQuery.data?.workers ?? [])
       .filter((worker) => !seen.has(worker.id))
       .map((worker) => ({
         id: worker.id,
@@ -1431,7 +1426,10 @@ export function Swarm2Screen() {
   }
 
   function openAddSwarm() {
-    const existingIds = new Set((rosterQuery.data ?? []).map((worker) => worker.id))
+    const existingIds = new Set([
+      ...(rosterQuery.data?.workers ?? []),
+      ...(rosterQuery.data?.pendingProfiles ?? []),
+    ].map((worker) => worker.id))
     let next = 13
     while (existingIds.has(`swarm${next}`)) next += 1
     setNewWorkerId(`swarm${next}`)
@@ -1594,6 +1592,17 @@ export function Swarm2Screen() {
           </div>
         </header>
 
+        {rosterQuery.data?.pendingProfiles.length ? (
+          <section aria-label="Workers awaiting profiles" className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] px-4 py-3 text-sm text-[var(--theme-muted)]">
+            <p>Create a Hermes profile for each saved worker to make it available for dispatch.</p>
+            <ul className="mt-1 list-disc pl-5 text-[var(--theme-text)]">
+              {rosterQuery.data.pendingProfiles.map((worker) => (
+                <li key={worker.id}>{worker.name ? `${worker.name} ` : ''}<code>{worker.id}</code></li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <div className="grid min-h-0 grid-cols-1 gap-3">
           <ControlPlaneStage
             members={members}
@@ -1663,7 +1672,7 @@ export function Swarm2Screen() {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold text-[var(--theme-text)]">Add Swarm Agent</h2>
-                <p className="mt-1 text-sm text-[var(--theme-muted-2)]">Create a new swarm roster entry and configure its identity.</p>
+                <p className="mt-1 text-sm text-[var(--theme-muted-2)]">Save a worker’s settings. It needs a matching Hermes profile before dispatch.</p>
               </div>
               <button
                 type="button"
@@ -1685,7 +1694,6 @@ export function Swarm2Screen() {
                     if (preset && role !== 'Custom') {
                       if (!newWorkerSpecialty.trim()) setNewWorkerSpecialty(preset.specialty)
                       if (!newWorkerMission.trim()) setNewWorkerMission(preset.mission)
-                      if (preset.defaultModel && !newWorkerModel.trim()) setNewWorkerModel(preset.defaultModel)
                     }
                   }}
                   className="w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-3 py-2 text-[var(--theme-text)] outline-none"
@@ -1715,7 +1723,7 @@ export function Swarm2Screen() {
                   value={newWorkerModel}
                   onChange={(e) => setNewWorkerModel(e.target.value)}
                   list="swarm-add-models"
-                  placeholder={availableModels.length ? 'Search or pick a detected model…' : modelsQuery.isLoading ? 'Loading detected models…' : 'No models detected'}
+                  placeholder="Leave blank to use the profile’s model"
                   className="w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] px-3 py-2 text-[var(--theme-text)] outline-none"
                 />
                 <datalist id="swarm-add-models">
